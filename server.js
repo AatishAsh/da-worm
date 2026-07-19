@@ -373,10 +373,11 @@ setInterval(() => {
       id: player.id,
       name: player.name,
       color: player.color,
-      x: player.x,
-      y: player.y,
+      x: Math.round(player.x),
+      y: Math.round(player.y),
       angle: player.angle,
-      body: player.body,
+      // Flatten body [{x, y}, ...] to flat integer array [x1, y1, x2, y2, ...]
+      body: player.body.flatMap(seg => [Math.round(seg.x), Math.round(seg.y)]),
       score: player.score,
       boost: player.boost,
       isInvulnerable,
@@ -478,7 +479,7 @@ setInterval(() => {
     }, 4000);
   }
 
-}, 25);
+}, 33);
 
 function killPlayer(player, killer) {
   player.isDead = true;

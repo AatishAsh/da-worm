@@ -554,7 +554,7 @@ window.addEventListener('keyup', (e) => {
   }
 });
 
-// Stream inputs to server (33 Hz)
+// Stream inputs to server (30 Hz)
 setInterval(() => {
   if (isConnected && !isDead && socket.readyState === WebSocket.OPEN && currentGameState === 'playing') {
     socket.send(JSON.stringify({
@@ -563,7 +563,7 @@ setInterval(() => {
       boost: isBoosting
     }));
   }
-}, 30);
+}, 33);
 
 // Rendering Engine
 function render() {
@@ -577,7 +577,14 @@ function render() {
     let cp = clientPlayers.get(sp.id);
     
     if (!cp) {
-      const renderBody = sp.body.map(seg => ({ x: seg.x, y: seg.y }));
+      // Decode flat coordinates array [x1, y1, x2, y2, ...]
+      const renderBody = [];
+      for (let i = 0; i < sp.body.length / 2; i++) {
+        renderBody.push({
+          x: sp.body[i * 2],
+          y: sp.body[i * 2 + 1]
+        });
+      }
       cp = {
         id: sp.id,
         name: sp.name,
@@ -589,29 +596,34 @@ function render() {
       };
       clientPlayers.set(sp.id, cp);
     } else {
-      cp.renderX += (sp.x - cp.renderX) * 0.55;
-      cp.renderY += (sp.y - cp.renderY) * 0.55;
+      // 30 FPS Linear Interpolation (LERP) (using 0.45 factor)
+      cp.renderX += (sp.x - cp.renderX) * 0.45;
+      cp.renderY += (sp.y - cp.renderY) * 0.45;
       
       let angleDiff = sp.angle - cp.angle;
       angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
-      cp.angle += angleDiff * 0.55;
+      cp.angle += angleDiff * 0.45;
 
-      if (cp.renderBody.length !== sp.body.length) {
-        if (cp.renderBody.length < sp.body.length) {
-          const diff = sp.body.length - cp.renderBody.length;
+      const serverBodyLength = sp.body.length / 2;
+      if (cp.renderBody.length !== serverBodyLength) {
+        if (cp.renderBody.length < serverBodyLength) {
+          const diff = serverBodyLength - cp.renderBody.length;
           const lastSeg = cp.renderBody[cp.renderBody.length - 1] || { x: cp.renderX, y: cp.renderY };
           for (let i = 0; i < diff; i++) {
             cp.renderBody.push({ x: lastSeg.x, y: lastSeg.y });
           }
         } else {
-          cp.renderBody.splice(sp.body.length);
+          cp.renderBody.splice(serverBodyLength);
         }
       }
 
-      for (let i = 0; i < sp.body.length; i++) {
-        if (cp.renderBody[i] && sp.body[i]) {
-          cp.renderBody[i].x += (sp.body[i].x - cp.renderBody[i].x) * 0.55;
-          cp.renderBody[i].y += (sp.body[i].y - cp.renderBody[i].y) * 0.55;
+      // Decode flat coordinates and LERP
+      for (let i = 0; i < serverBodyLength; i++) {
+        const targetX = sp.body[i * 2];
+        const targetY = sp.body[i * 2 + 1];
+        if (cp.renderBody[i] && targetX !== undefined) {
+          cp.renderBody[i].x += (targetX - cp.renderBody[i].x) * 0.45;
+          cp.renderBody[i].y += (targetY - cp.renderBody[i].y) * 0.45;
         }
       }
       
