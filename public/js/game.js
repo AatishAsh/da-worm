@@ -282,6 +282,14 @@ function connectWS() {
       clientPlayers.clear();
       particles = [];
       
+      // Load refreshed food list for the new round
+      foodMap.clear();
+      if (data.foodList) {
+        data.foodList.forEach(item => {
+          foodMap.set(item.id, item);
+        });
+      }
+      
       partyLobbyScreen.classList.add('hidden');
       deathScreen.classList.add('hidden');
       gameHud.classList.remove('hidden');

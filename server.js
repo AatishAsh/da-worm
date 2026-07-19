@@ -233,7 +233,10 @@ wss.on('connection', (ws) => {
             }
           });
 
-          broadcast({ type: 'game_start' });
+          broadcast({
+            type: 'game_start',
+            foodList: Array.from(food.values())
+          });
         }
 
       } else if (data.type === 'input' && playerJoined) {
