@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Da Worm - LAN Multiplayer Arena</title>
+  <!-- Google Fonts for modern typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Game Canvas -->
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- Login/Lobby Screen -->
+  <div id="lobbyScreen" class="overlay">
+    <div class="lobby-card">
+      <div class="logo-container">
+        <h1 class="logo-text">DA WORM</h1>
+        <p class="subtitle">LAN Multiplayer Arena</p>
+      </div>
+
+      <div class="input-group">
+        <label for="nickname">Worm Nickname</label>
+        <input type="text" id="nickname" maxlength="15" placeholder="Enter nickname..." autocomplete="off">
+      </div>
+
+      <div class="input-group">
+        <label>Select Skin Color</label>
+        <div class="color-picker" id="colorPicker">
+          <!-- Neon color options will be injected here via JS -->
+        </div>
+      </div>
+
+      <button id="joinBtn" class="glowing-btn">JOIN LOBBY</button>
+
+      <div class="info-section">
+        <h3>How to Play</h3>
+        <p>🖱️ Move mouse to guide your worm.</p>
+        <p>⚡ Hold <strong>Left-Click</strong> or <strong>Spacebar</strong> to BOOST speed (costs mass).</p>
+        <p>💥 Force other players to headbutt your trailing body to destroy them!</p>
+      </div>
+
+      <div class="connection-status" id="connStatus">
+        <span class="status-dot disconnected"></span> Connecting to arena...
+      </div>
+    </div>
+  </div>
+
+  <!-- Party Room Waiting Lobby -->
+  <div id="partyLobbyScreen" class="overlay hidden">
+    <div class="lobby-card">
+      <div class="logo-container">
+        <h1 class="logo-text" style="font-size: 2.5rem;">PARTY LOBBY</h1>
+        <p class="subtitle">Assemble Your Worms</p>
+      </div>
+
+      <div class="lobby-players-container">
+        <h3>Connected Players</h3>
+        <ul id="lobbyPlayersList">
+          <!-- Injected via JS: lists names, skin colors, host status -->
+        </ul>
+      </div>
+
+      <div id="hostControls" class="hidden">
+        <button id="startGameBtn" class="glowing-btn" style="background: linear-gradient(135deg, #39ff14, #00f0ff); box-shadow: 0 4px 20px rgba(57, 255, 20, 0.35);">START MATCH</button>
+      </div>
+      
+      <div id="guestStatus" class="guest-waiting-status">
+        <div class="pulse-dot"></div> Waiting for host to start the game...
+      </div>
+    </div>
+  </div>
+
+  <!-- In-game UI Overlay -->
+  <div id="gameHud" class="hud-container hidden">
+    <!-- Leaderboard -->
+    <div class="hud-panel leaderboard-panel">
+      <h3>Leaderboard</h3>
+      <ol id="leaderboardList">
+        <!-- Injected via JS -->
+      </ol>
+    </div>
+
+    <!-- Stats -->
+    <div class="hud-panel stats-panel">
+      <div class="stat-item">
+        <span class="stat-label">Mass / Length</span>
+        <span class="stat-value" id="statLength">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Speed</span>
+        <span class="stat-value" id="statSpeed">0</span>
+      </div>
+      <div id="boostIndicator" class="boost-indicator">
+        BOOST READY
+      </div>
+      <!-- Host Control Panel inside Game -->
+      <button id="hostResetBtn" class="host-reset-btn hidden">END MATCH</button>
+    </div>
+
+    <!-- Live Kill Feed -->
+    <div id="killFeed" class="kill-feed"></div>
+
+    <!-- Minimap Container -->
+    <div class="hud-panel minimap-panel">
+      <canvas id="minimapCanvas" width="150" height="150"></canvas>
+    </div>
+  </div>
+
+  <!-- Death/Respawn Screen -->
+  <div id="deathScreen" class="overlay hidden">
+    <div class="death-card">
+      <h2 class="death-title">WASTED</h2>
+      <p id="deathMessage" class="death-msg">You crashed into a wall.</p>
+      <div class="death-stats">
+        <div>
+          <span class="stat-label">Final Mass</span>
+          <span class="stat-value" id="finalScore">0</span>
+        </div>
+      </div>
+      <div class="death-actions">
+        <p class="hint" style="margin-top: 0; margin-bottom: 15px;">Waiting for the match to end or host to reset...</p>
+        <button id="backToLobbyBtn" class="glowing-btn hidden" style="background: linear-gradient(135deg, #ff0055, #bd00ff); box-shadow: 0 4px 20px rgba(255, 0, 85, 0.3);">RETURN TO LOBBY</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Core Game Logic Script -->
+  <script src="js/game.js"></script>
+</body>
+</html>

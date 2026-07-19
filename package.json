@@ -1,0 +1,14 @@
+{
+  "name": "da-worm",
+  "version": "1.0.0",
+  "description": "Da Worm - Real-time LAN multiplayer arena game",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.18.0"
+  }
+}
