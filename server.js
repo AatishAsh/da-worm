@@ -28,10 +28,15 @@ let gameState = 'lobby'; // 'lobby' or 'playing'
 let hostId = null;
 const players = new Map(); // id -> player object
 const food = new Map(); // id -> food object
+let currentMapWidth = MAP_WIDTH;
+let currentMapHeight = MAP_HEIGHT;
+let matchStartTime = 0;
+let hasBroadcastShrinkStart = false;
 let foodIdCounter = 0;
 
 // Serve static assets
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/fonts', express.static(path.join(__dirname, 'fonts')));
 
 function generateId() {
   return Math.random().toString(36).substring(2, 9);
@@ -39,7 +44,7 @@ function generateId() {
 
 function getRandomColor() {
   const colors = [
-    '#00f0ff', '#ff007f', '#39ff14', '#ffff00', '#ff5f00', '#bd00ff', '#ff0000', '#00ffcc'
+    '#FF595E', '#FFCA3A', '#8AC926', '#1982C4', '#6A4C93'
   ];
   return colors[Math.floor(Math.random() * colors.length)];
 }
@@ -47,8 +52,8 @@ function getRandomColor() {
 function getSafeFoodPosition() {
   let attempts = 0;
   while (attempts < 25) {
-    const x = Math.random() * (MAP_WIDTH - 100) + 50;
-    const y = Math.random() * (MAP_HEIGHT - 100) + 50;
+    const x = Math.random() * (currentMapWidth - 100) + 50;
+    const y = Math.random() * (currentMapHeight - 100) + 50;
     
     let tooClose = false;
     for (const player of players.values()) {
@@ -66,8 +71,8 @@ function getSafeFoodPosition() {
     attempts++;
   }
   return {
-    x: Math.random() * (MAP_WIDTH - 100) + 50,
-    y: Math.random() * (MAP_HEIGHT - 100) + 50
+    x: Math.random() * (currentMapWidth - 100) + 50,
+    y: Math.random() * (currentMapHeight - 100) + 50
   };
 }
 
@@ -80,7 +85,7 @@ function spawnFood(count) {
       id,
       x: pos.x,
       y: pos.y,
-      color: isBig ? '#ffd700' : getRandomColor(),
+      color: isBig ? '#FFCA3A' : getRandomColor(),
       value: isBig ? 10 : 1, // Big dots are worth 10 segments
     });
   }
@@ -210,6 +215,10 @@ wss.on('connection', (ws) => {
           console.log('Host triggered game start!');
           
           gameState = 'playing';
+          currentMapWidth = MAP_WIDTH;
+          currentMapHeight = MAP_HEIGHT;
+          matchStartTime = Date.now();
+          hasBroadcastShrinkStart = false;
           
           // Initialize and spawn all lobby players
           players.forEach((player) => {
@@ -298,6 +307,31 @@ setInterval(() => {
   const playerUpdates = [];
   let aliveCount = 0;
 
+  // Handle Map Border Shrink
+  const elapsed = now - matchStartTime;
+  if (elapsed >= 60000) { // 1 minute
+    if (!hasBroadcastShrinkStart) {
+      broadcast({
+        type: 'notification',
+        message: '⚠️ <strong>The border is shrinking now!</strong>'
+      });
+      hasBroadcastShrinkStart = true;
+    }
+    
+    // Shrink from 2500 to 500 over 9 minutes (540,000ms elapsed)
+    const progress = Math.min(1, (elapsed - 60000) / 540000);
+    currentMapWidth = Math.round(MAP_WIDTH - ((MAP_WIDTH - 500) * progress));
+    currentMapHeight = Math.round(MAP_HEIGHT - ((MAP_HEIGHT - 500) * progress));
+
+    // Cleanup food pellets outside the shrinking boundaries
+    food.forEach((pellet) => {
+      if (pellet.x > currentMapWidth - 10 || pellet.y > currentMapHeight - 10 || pellet.x < 10 || pellet.y < 10) {
+        food.delete(pellet.id);
+        broadcast({ type: 'eat_food', id: pellet.id, playerId: null });
+      }
+    });
+  }
+
   // Update positions and handle boosting
   players.forEach((player) => {
     if (player.isDead) return;
@@ -346,9 +380,9 @@ setInterval(() => {
 
     // Arena boundary limits
     if (player.x < 0) player.x = 0;
-    if (player.x > MAP_WIDTH) player.x = MAP_WIDTH;
+    if (player.x > currentMapWidth) player.x = currentMapWidth;
     if (player.y < 0) player.y = 0;
-    if (player.y > MAP_HEIGHT) player.y = MAP_HEIGHT;
+    if (player.y > currentMapHeight) player.y = currentMapHeight;
 
     // Move Body
     let prevX = player.x;
@@ -415,7 +449,7 @@ setInterval(() => {
               id: newFoodId,
               x: pos.x,
               y: pos.y,
-              color: isBig ? '#ffd700' : getRandomColor(),
+              color: isBig ? '#FFCA3A' : getRandomColor(),
               value: isBig ? 10 : 1,
             };
             food.set(newFoodId, newPellet);
@@ -430,9 +464,9 @@ setInterval(() => {
   players.forEach((player) => {
     if (player.isDead) return;
 
-    // Check Wall Crash
-    if (player.x <= player.radius || player.x >= MAP_WIDTH - player.radius ||
-        player.y <= player.radius || player.y >= MAP_HEIGHT - player.radius) {
+    // Check Wall Crash against dynamic shrinking boarders
+    if (player.x <= player.radius || player.x >= currentMapWidth - player.radius ||
+        player.y <= player.radius || player.y >= currentMapHeight - player.radius) {
       killPlayer(player, 'wall');
       return;
     }
@@ -468,11 +502,13 @@ setInterval(() => {
     }
   });
 
-  // Send state updates to all clients
+  // Send state updates to all clients with current active boundary dimensions
   broadcast({
     type: 'state',
     players: playerUpdates,
     tick: tickCount++,
+    mapWidth: currentMapWidth,
+    mapHeight: currentMapHeight,
   });
 
   // If everyone is dead, wait a few seconds and return to lobby

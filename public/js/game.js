@@ -33,18 +33,15 @@ let isBoosting = false;
 // Audio
 let audioCtx = null;
 
-// Neon Colors
+// Color Palette Colors
 const SKIN_COLORS = [
-  { name: 'cyan', code: '#00f0ff' },
-  { name: 'pink', code: '#ff007f' },
-  { name: 'green', code: '#39ff14' },
-  { name: 'yellow', code: '#ffff00' },
-  { name: 'orange', code: '#ff5f00' },
-  { name: 'purple', code: '#bd00ff' },
-  { name: 'red', code: '#ff0000' },
-  { name: 'mint', code: '#00ffcc' }
+  { name: 'coral', code: '#FF595E' },
+  { name: 'yellow', code: '#FFCA3A' },
+  { name: 'green', code: '#8AC926' },
+  { name: 'blue', code: '#1982C4' },
+  { name: 'purple', code: '#6A4C93' }
 ];
-let selectedColor = SKIN_COLORS[0].code;
+let selectedColor = SKIN_COLORS[3].code; // Default to Blue
 
 // UI Elements
 const lobbyScreen = document.getElementById('lobbyScreen');
@@ -363,6 +360,11 @@ function connectWS() {
 
     } else if (data.type === 'state') {
       serverPlayers = data.players;
+      
+      // Update dynamic shrinking border dimensions
+      if (data.mapWidth !== undefined) gameConfig.mapWidth = data.mapWidth;
+      if (data.mapHeight !== undefined) gameConfig.mapHeight = data.mapHeight;
+
       me = serverPlayers.find(p => p.id === playerId);
       
       if (me) {
@@ -377,6 +379,9 @@ function connectWS() {
         }
       }
       updateLeaderboard();
+
+    } else if (data.type === 'notification') {
+      showKillFeedMessage(data.message);
     }
   };
 }
@@ -599,7 +604,7 @@ setInterval(() => {
 function render() {
   requestAnimationFrame(render);
 
-  ctx.fillStyle = '#090a0f';
+  ctx.fillStyle = '#f8fafc';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   // Update client position interpolation
@@ -722,7 +727,7 @@ function render() {
 }
 
 function drawGrid(offsetX, offsetY) {
-  ctx.strokeStyle = '#141724';
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.05)';
   ctx.lineWidth = 1;
   const gridSize = 100;
 
@@ -750,8 +755,8 @@ function drawGrid(offsetX, offsetY) {
 }
 
 function drawBoundaries(offsetX, offsetY) {
-  ctx.strokeStyle = '#ff0055';
-  ctx.lineWidth = 8;
+  ctx.strokeStyle = '#FF595E';
+  ctx.lineWidth = 12;
   ctx.strokeRect(offsetX, offsetY, gameConfig.mapWidth, gameConfig.mapHeight);
 }
 
@@ -826,7 +831,7 @@ function drawWorms(offsetX, offsetY) {
         ctx.beginPath();
         ctx.arc(screenX, screenY, radius, 0, Math.PI * 2);
         ctx.fill();
-
+        
         ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
         ctx.beginPath();
         ctx.arc(screenX - radius * 0.3, screenY - radius * 0.3, radius * 0.3, 0, Math.PI * 2);
@@ -841,11 +846,10 @@ function drawWorms(offsetX, offsetY) {
         headY + baseRadius > 0 && headY - baseRadius < canvas.height) {
       
       if (player.isInvulnerable) {
-        ctx.strokeStyle = '#00f0ff';
-        ctx.lineWidth = 3;
         ctx.beginPath();
         const shieldAlpha = 0.3 + Math.sin(Date.now() * 0.015) * 0.2;
         ctx.strokeStyle = `rgba(0, 240, 255, ${shieldAlpha})`;
+        ctx.lineWidth = 3;
         ctx.arc(headX, headY, baseRadius + 10, 0, Math.PI * 2);
         ctx.stroke();
       }
@@ -888,10 +892,13 @@ function drawWorms(offsetX, offsetY) {
       ctx.arc(rightEyeX + pupilShiftX, rightEyeY + pupilShiftY, pupilRadius, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-      ctx.font = 'bold 11px Outfit';
+      ctx.font = 'bold 13px Yuyu';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3.5;
+      ctx.strokeText(player.name, headX, headY - baseRadius - 6);
+      ctx.fillStyle = '#0f172a';
       ctx.fillText(player.name, headX, headY - baseRadius - 6);
     }
   });
@@ -901,8 +908,8 @@ function drawMinimap() {
   mCtx.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
   const scale = minimapCanvas.width / gameConfig.mapWidth;
 
-  mCtx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-  mCtx.lineWidth = 1;
+  mCtx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+  mCtx.lineWidth = 1.5;
   mCtx.strokeRect(0, 0, minimapCanvas.width, minimapCanvas.height);
 
   clientPlayers.forEach((player) => {
