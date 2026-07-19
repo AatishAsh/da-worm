@@ -17,6 +17,7 @@ let gameConfig = { mapWidth: 2500, mapHeight: 2500, spawnShield: 3000 };
 let isConnected = false;
 let isDead = true;
 let currentGameState = 'lobby';
+let spectatePlayerId = null;
 
 // Camera
 let camera = { x: 1250, y: 1250, zoom: 1 };
@@ -69,6 +70,13 @@ const deathScreen = document.getElementById('deathScreen');
 const deathMessage = document.getElementById('deathMessage');
 const finalScore = document.getElementById('finalScore');
 const backToLobbyBtn = document.getElementById('backToLobbyBtn');
+
+const spectateBtn = document.getElementById('spectateBtn');
+const spectatorHud = document.getElementById('spectatorHud');
+const specPlayerName = document.getElementById('specPlayerName');
+const specPrevBtn = document.getElementById('specPrevBtn');
+const specNextBtn = document.getElementById('specNextBtn');
+const specExitBtn = document.getElementById('specExitBtn');
 
 // Initialize Lobby UX
 function initLobby() {
@@ -130,6 +138,11 @@ function initLobby() {
       joinLobby();
     }
   });
+
+  spectateBtn.addEventListener('click', startSpectating);
+  specExitBtn.addEventListener('click', stopSpectating);
+  specPrevBtn.addEventListener('click', () => switchSpectate(-1));
+  specNextBtn.addEventListener('click', () => switchSpectate(1));
 
   // Start Connection
   connectWS();
@@ -254,10 +267,12 @@ function connectWS() {
       isHost = (data.hostId === playerId);
 
       if (currentGameState === 'lobby') {
-        // Show lobby overlay, hide play/death overlays
+        // Show lobby overlay, hide play/death/spectator overlays
         partyLobbyScreen.classList.remove('hidden');
         gameHud.classList.add('hidden');
         deathScreen.classList.add('hidden');
+        spectatorHud.classList.add('hidden');
+        spectatePlayerId = null;
         
         // Render lobby players
         renderLobbyPlayers(data.players);
@@ -281,6 +296,7 @@ function connectWS() {
       isDead = false;
       clientPlayers.clear();
       particles = [];
+      spectatePlayerId = null;
       
       // Load refreshed food list for the new round
       foodMap.clear();
@@ -292,6 +308,7 @@ function connectWS() {
       
       partyLobbyScreen.classList.add('hidden');
       deathScreen.classList.add('hidden');
+      spectatorHud.classList.add('hidden');
       gameHud.classList.remove('hidden');
       
       showKillFeedMessage('🚀 <strong>Match Started! Go, go, go!</strong>');
@@ -537,6 +554,19 @@ window.addEventListener('mouseup', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
+  // Catch Arrow Keys / WASD for switching spectated player
+  if (spectatePlayerId !== null) {
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+      switchSpectate(-1);
+      e.preventDefault();
+      return;
+    } else if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+      switchSpectate(1);
+      e.preventDefault();
+      return;
+    }
+  }
+
   if (e.code === 'Space') {
     if (isDead) {
       // Ignore spacer spawning during active games
@@ -645,9 +675,24 @@ function render() {
   });
 
   const targetMe = clientPlayers.get(playerId);
-  if (targetMe && !isDead && currentGameState === 'playing') {
-    camera.x += (targetMe.renderX - camera.x) * 0.1;
-    camera.y += (targetMe.renderY - camera.y) * 0.1;
+  let followPlayer = null;
+
+  if (currentGameState === 'playing') {
+    if (spectatePlayerId !== null) {
+      followPlayer = clientPlayers.get(spectatePlayerId);
+      // Auto-switch spectating targets if the player died or disconnected
+      if (!followPlayer || !serverPlayers.some(sp => sp.id === spectatePlayerId)) {
+        autoSwitchSpectate();
+        followPlayer = clientPlayers.get(spectatePlayerId);
+      }
+    } else if (targetMe && !isDead) {
+      followPlayer = targetMe;
+    }
+  }
+
+  if (followPlayer) {
+    camera.x += (followPlayer.renderX - camera.x) * 0.1;
+    camera.y += (followPlayer.renderY - camera.y) * 0.1;
   } else {
     const time = Date.now() * 0.0003;
     const pathRadius = 200;
@@ -878,3 +923,73 @@ function drawMinimap() {
 
 window.onload = initLobby;
 render();
+
+// Spectator Mode Logic
+function startSpectating() {
+  deathScreen.classList.add('hidden');
+  spectatorHud.classList.remove('hidden');
+  gameHud.classList.remove('hidden');
+
+  if (serverPlayers.length > 0) {
+    // Select first active player
+    spectatePlayerId = serverPlayers[0].id;
+    updateSpectateUI();
+  } else {
+    spectatePlayerId = null;
+    specPlayerName.innerText = 'No players alive';
+    specPlayerName.style.color = '#ffffff';
+  }
+}
+
+function stopSpectating() {
+  spectatePlayerId = null;
+  spectatorHud.classList.add('hidden');
+  gameHud.classList.add('hidden');
+  deathScreen.classList.remove('hidden');
+}
+
+function switchSpectate(direction) {
+  if (serverPlayers.length === 0) {
+    spectatePlayerId = null;
+    specPlayerName.innerText = 'No players alive';
+    specPlayerName.style.color = '#ffffff';
+    return;
+  }
+
+  let index = serverPlayers.findIndex(sp => sp.id === spectatePlayerId);
+  if (index === -1) {
+    index = 0;
+  } else {
+    index = (index + direction + serverPlayers.length) % serverPlayers.length;
+  }
+
+  spectatePlayerId = serverPlayers[index].id;
+  updateSpectateUI();
+}
+
+function autoSwitchSpectate() {
+  if (serverPlayers.length > 0) {
+    spectatePlayerId = serverPlayers[0].id;
+    updateSpectateUI();
+  } else {
+    spectatePlayerId = null;
+    specPlayerName.innerText = 'No players alive';
+    specPlayerName.style.color = '#ffffff';
+  }
+}
+
+function updateSpectateUI() {
+  if (spectatePlayerId) {
+    const p = clientPlayers.get(spectatePlayerId);
+    if (p) {
+      specPlayerName.innerText = p.name;
+      specPlayerName.style.color = p.color;
+    } else {
+      specPlayerName.innerText = 'Connecting...';
+      specPlayerName.style.color = '#ffffff';
+    }
+  } else {
+    specPlayerName.innerText = 'No players alive';
+    specPlayerName.style.color = '#ffffff';
+  }
+}

@@ -123,12 +123,25 @@
         </div>
       </div>
       <div class="death-actions">
+        <button id="spectateBtn" class="glowing-btn" style="background: linear-gradient(135deg, #00f0ff, #bd00ff); box-shadow: 0 4px 20px rgba(0, 240, 255, 0.3); margin-bottom: 12px;">SPECTATE MATCH</button>
         <p class="hint" style="margin-top: 0; margin-bottom: 15px;">Waiting for the match to end or host to reset...</p>
         <button id="backToLobbyBtn" class="glowing-btn hidden" style="background: linear-gradient(135deg, #ff0055, #bd00ff); box-shadow: 0 4px 20px rgba(255, 0, 85, 0.3);">RETURN TO LOBBY</button>
       </div>
     </div>
   </div>
 
+  <!-- Spectator Overlay HUD -->
+  <div id="spectatorHud" class="spectator-hud-container hidden">
+    <div class="spectator-bar">
+      <button id="specPrevBtn" class="spec-btn">◀</button>
+      <div class="spec-info">
+        <span class="spec-label">SPECTATING</span>
+        <span id="specPlayerName" class="spec-player-name">PlayerName</span>
+      </div>
+      <button id="specNextBtn" class="spec-btn">▶</button>
+      <button id="specExitBtn" class="spec-btn exit-btn">Exit Spectate</button>
+    </div>
+  </div>
   <!-- Core Game Logic Script -->
   <script src="js/game.js"></script>
 </body>

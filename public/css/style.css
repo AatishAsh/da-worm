@@ -641,6 +641,100 @@ body {
   color: var(--text-secondary);
   margin-top: 15px;
 }
+
 .hidden {
   display: none !important;
 }
+
+/* Spectator Mode HUD Panel */
+.spectator-hud-container {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 15;
+  pointer-events: auto;
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.spectator-bar {
+  background: var(--panel-bg);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 50px;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 240, 255, 0.08);
+}
+
+.spec-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 140px;
+}
+
+.spec-label {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: var(--accent-color);
+  letter-spacing: 2px;
+  margin-bottom: 2px;
+}
+
+.spec-player-name {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+}
+
+.spec-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  font-size: 0.95rem;
+}
+
+.spec-btn:hover {
+  background: rgba(0, 240, 255, 0.15);
+  border-color: var(--accent-color);
+  color: #fff;
+  box-shadow: 0 0 10px rgba(0, 240, 255, 0.35);
+  transform: scale(1.08);
+}
+
+.spec-btn:active {
+  transform: scale(0.95);
+}
+
+.spec-btn.exit-btn {
+  width: auto;
+  height: auto;
+  border-radius: 20px;
+  padding: 8px 16px;
+  background: rgba(255, 0, 85, 0.08);
+  border-color: rgba(255, 0, 85, 0.3);
+  color: #ff3366;
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin-left: 10px;
+}
+
+.spec-btn.exit-btn:hover {
+  background: #ff0055;
+  color: #fff;
+  border-color: #ff0055;
+  box-shadow: 0 0 15px rgba(255, 0, 85, 0.45);
+}
+

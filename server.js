@@ -75,12 +75,13 @@ function spawnFood(count) {
   for (let i = 0; i < count; i++) {
     const id = `f_${foodIdCounter++}`;
     const pos = getSafeFoodPosition();
+    const isBig = (i < 5); // Start with exactly 5 big gold dots in the arena
     food.set(id, {
       id,
       x: pos.x,
       y: pos.y,
-      color: getRandomColor(),
-      value: 1, // Fix: grow by exactly 1 segment per dot
+      color: isBig ? '#ffd700' : getRandomColor(),
+      value: isBig ? 10 : 1, // Big dots are worth 10 segments
     });
   }
 }
@@ -404,18 +405,23 @@ setInterval(() => {
         }
         player.score = player.body.length;
 
-        // Respawn replacement food at a safe position away from players
-        const newFoodId = `f_${foodIdCounter++}`;
-        const pos = getSafeFoodPosition();
-        const newPellet = {
-          id: newFoodId,
-          x: pos.x,
-          y: pos.y,
-          color: getRandomColor(),
-          value: 1, // Fix: Replacement food grows by exactly 1 segment
-        };
-        food.set(newFoodId, newPellet);
-        broadcast({ type: 'spawn_food', food: newPellet });
+        // Respawn replacement food at a safe position away from players after 5 seconds
+        setTimeout(() => {
+          if (gameState === 'playing') {
+            const newFoodId = `f_${foodIdCounter++}`;
+            const pos = getSafeFoodPosition();
+            const isBig = Math.random() < 0.03; // 3% chance for replacement to be a big gold dot
+            const newPellet = {
+              id: newFoodId,
+              x: pos.x,
+              y: pos.y,
+              color: isBig ? '#ffd700' : getRandomColor(),
+              value: isBig ? 10 : 1,
+            };
+            food.set(newFoodId, newPellet);
+            broadcast({ type: 'spawn_food', food: newPellet });
+          }
+        }, 5000); // 5 seconds delay
       }
     });
   });
