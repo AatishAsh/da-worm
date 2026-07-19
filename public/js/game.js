@@ -18,6 +18,7 @@ let isConnected = false;
 let isDead = true;
 let currentGameState = 'lobby';
 let spectatePlayerId = null;
+let hasJoined = false;
 
 // Camera
 let camera = { x: 1250, y: 1250, zoom: 1 };
@@ -232,6 +233,7 @@ function connectWS() {
   socket.onclose = () => {
     isConnected = false;
     isDead = true;
+    hasJoined = false;
     currentGameState = 'lobby';
     connStatus.innerHTML = '<span class="status-dot disconnected"></span> Disconnected. Reconnecting...';
     
@@ -239,12 +241,16 @@ function connectWS() {
     partyLobbyScreen.classList.add('hidden');
     gameHud.classList.add('hidden');
     deathScreen.classList.add('hidden');
+    spectatorHud.classList.add('hidden');
     lobbyScreen.classList.remove('hidden');
     
     setTimeout(connectWS, 3000);
   };
 
   socket.onmessage = (event) => {
+    // Ignore all broadcast events if this client hasn't officially clicked join yet
+    if (!hasJoined) return;
+
     const data = JSON.parse(event.data);
 
     if (data.type === 'init') {
@@ -257,7 +263,21 @@ function connectWS() {
       });
       
       lobbyScreen.classList.add('hidden');
-      partyLobbyScreen.classList.remove('hidden');
+      
+      if (data.gameState === 'playing') {
+        currentGameState = 'playing';
+        isDead = false;
+        clientPlayers.clear();
+        particles = [];
+        spectatePlayerId = null;
+        
+        partyLobbyScreen.classList.add('hidden');
+        deathScreen.classList.add('hidden');
+        spectatorHud.classList.add('hidden');
+        gameHud.classList.remove('hidden');
+      } else {
+        partyLobbyScreen.classList.remove('hidden');
+      }
       
     } else if (data.type === 'lobby_update') {
       currentGameState = data.gameState;
@@ -398,6 +418,7 @@ function joinLobby() {
     name: name,
     color: selectedColor
   }));
+  hasJoined = true;
 }
 
 // Render player list inside lobby

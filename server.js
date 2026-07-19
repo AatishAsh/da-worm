@@ -172,24 +172,38 @@ wss.on('connection', (ws) => {
           hostId = playerId;
         }
 
+        const startX = Math.random() * (currentMapWidth - 400) + 200;
+        const startY = Math.random() * (currentMapHeight - 400) + 200;
+        const startAngle = Math.random() * Math.PI * 2;
+
         const playerState = {
           id: playerId,
           name,
           color,
-          x: 0,
-          y: 0,
-          angle: 0,
-          targetAngle: 0,
+          x: startX,
+          y: startY,
+          angle: startAngle,
+          targetAngle: startAngle,
           speed: BASE_SPEED,
           radius: WORM_RADIUS,
           score: 10,
           body: [],
           boost: false,
           isDead: false,
-          spawnTime: 0,
+          spawnTime: gameState === 'playing' ? Date.now() : 0,
           lastBoostTick: 0,
           isReady: false,
         };
+
+        // If joining during active gameplay, populate body segments immediately
+        if (gameState === 'playing') {
+          for (let i = 0; i < 10; i++) {
+            playerState.body.push({
+              x: startX - Math.cos(startAngle) * (i * 10),
+              y: startY - Math.sin(startAngle) * (i * 10),
+            });
+          }
+        }
 
         players.set(playerId, playerState);
         playerJoined = true;
@@ -199,10 +213,11 @@ wss.on('connection', (ws) => {
           type: 'init',
           playerId,
           config: {
-            mapWidth: MAP_WIDTH,
-            mapHeight: MAP_HEIGHT,
+            mapWidth: currentMapWidth,
+            mapHeight: currentMapHeight,
             spawnShield: SPAWN_SHIELD_DURATION,
           },
+          gameState, // Expose ongoing game state to client
           foodList: Array.from(food.values()),
         }));
 
