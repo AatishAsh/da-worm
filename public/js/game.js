@@ -3,7 +3,7 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
 const minimapCanvas = document.getElementById('minimapCanvas');
-const mCtx = minimapCanvas.getContext('2d');
+const mCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
 
 // Game State Variables
 let socket = null;
@@ -21,15 +21,16 @@ let spectatePlayerId = null;
 let hasJoined = false;
 
 // Camera
-let camera = { x: 1250, y: 1250, zoom: 1 };
+let camera = { x: 1250, y: 1250, zoom: 1, rotation: 0 };
 
 // Particles
 let particles = [];
 
 // Input
-let mouse = { x: 0, y: 0 };
 let targetAngle = 0;
 let isBoosting = false;
+let keyState = { left: false, right: false, boost: false };
+let touchState = { left: false, right: false, boost: false };
 
 // Audio
 let audioCtx = null;
@@ -64,6 +65,7 @@ const statSpeed = document.getElementById('statSpeed');
 const boostIndicator = document.getElementById('boostIndicator');
 const killFeed = document.getElementById('killFeed');
 
+const exitMatchBtn = document.getElementById('exitMatchBtn');
 const deathScreen = document.getElementById('deathScreen');
 const deathMessage = document.getElementById('deathMessage');
 const finalScore = document.getElementById('finalScore');
@@ -79,7 +81,7 @@ const specExitBtn = document.getElementById('specExitBtn');
 // Initialize Lobby UX
 function initLobby() {
   const savedNick = localStorage.getItem('daWormNick');
-  if (savedNick) {
+  if (savedNick && nicknameInput) {
     nicknameInput.value = savedNick;
   }
 
@@ -89,58 +91,78 @@ function initLobby() {
   }
 
   // Generate color options
-  colorPicker.innerHTML = '';
-  SKIN_COLORS.forEach(color => {
-    const opt = document.createElement('div');
-    opt.className = 'color-option';
-    opt.style.backgroundColor = color.code;
-    opt.style.color = color.code;
-    if (color.code === selectedColor) {
-      opt.classList.add('selected');
-    }
-    opt.addEventListener('click', () => {
-      document.querySelectorAll('.color-option').forEach(el => el.classList.remove('selected'));
-      opt.classList.add('selected');
-      selectedColor = color.code;
-      localStorage.setItem('daWormColor', color.code);
+  if (colorPicker) {
+    colorPicker.innerHTML = '';
+    SKIN_COLORS.forEach(color => {
+      const opt = document.createElement('div');
+      opt.className = 'color-option';
+      opt.style.backgroundColor = color.code;
+      opt.style.color = color.code;
+      if (color.code === selectedColor) {
+        opt.classList.add('selected');
+      }
+      opt.addEventListener('click', () => {
+        document.querySelectorAll('.color-option').forEach(el => el.classList.remove('selected'));
+        opt.classList.add('selected');
+        selectedColor = color.code;
+        localStorage.setItem('daWormColor', color.code);
+      });
+      colorPicker.appendChild(opt);
     });
-    colorPicker.appendChild(opt);
-  });
+  }
 
   window.addEventListener('resize', resizeCanvas);
   resizeCanvas();
 
   // Button Listeners
-  joinBtn.addEventListener('click', joinLobby);
+  if (joinBtn) {
+    joinBtn.addEventListener('click', joinLobby);
+  }
   
-  startGameBtn.addEventListener('click', () => {
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ type: 'start_game' }));
-    }
-  });
+  if (exitMatchBtn) {
+    exitMatchBtn.addEventListener('click', () => {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'back_to_lobby' }));
+      }
+    });
+  }
 
-  hostResetBtn.addEventListener('click', () => {
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ type: 'back_to_lobby' }));
-    }
-  });
+  if (startGameBtn) {
+    startGameBtn.addEventListener('click', () => {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'start_game' }));
+      }
+    });
+  }
 
-  backToLobbyBtn.addEventListener('click', () => {
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ type: 'back_to_lobby' }));
-    }
-  });
+  if (hostResetBtn) {
+    hostResetBtn.addEventListener('click', () => {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'back_to_lobby' }));
+      }
+    });
+  }
 
-  nicknameInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      joinLobby();
-    }
-  });
+  if (backToLobbyBtn) {
+    backToLobbyBtn.addEventListener('click', () => {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'back_to_lobby' }));
+      }
+    });
+  }
 
-  spectateBtn.addEventListener('click', startSpectating);
-  specExitBtn.addEventListener('click', stopSpectating);
-  specPrevBtn.addEventListener('click', () => switchSpectate(-1));
-  specNextBtn.addEventListener('click', () => switchSpectate(1));
+  if (nicknameInput) {
+    nicknameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        joinLobby();
+      }
+    });
+  }
+
+  if (spectateBtn) spectateBtn.addEventListener('click', startSpectating);
+  if (specExitBtn) specExitBtn.addEventListener('click', stopSpectating);
+  if (specPrevBtn) specPrevBtn.addEventListener('click', () => switchSpectate(-1));
+  if (specNextBtn) specNextBtn.addEventListener('click', () => switchSpectate(1));
 
   // Start Connection
   connectWS();
@@ -227,7 +249,7 @@ function connectWS() {
 
   socket.onopen = () => {
     isConnected = true;
-    connStatus.innerHTML = '<span class="status-dot connected"></span> Connected to Server';
+    if (connStatus) connStatus.innerHTML = '<span class="status-dot connected"></span> Connected to Server';
   };
 
   socket.onclose = () => {
@@ -235,7 +257,7 @@ function connectWS() {
     isDead = true;
     hasJoined = false;
     currentGameState = 'lobby';
-    connStatus.innerHTML = '<span class="status-dot disconnected"></span> Disconnected. Reconnecting...';
+    if (connStatus) connStatus.innerHTML = '<span class="status-dot disconnected"></span> Disconnected. Reconnecting...';
     
     // Reset overlays
     partyLobbyScreen.classList.add('hidden');
@@ -295,16 +317,12 @@ function connectWS() {
         renderLobbyPlayers(data.players);
 
         // Render host controls
-        if (isHost) {
-          hostControls.classList.remove('hidden');
-          guestStatus.classList.add('hidden');
-          hostResetBtn.classList.remove('hidden');
-          backToLobbyBtn.classList.remove('hidden');
+        if (isHost || data.players.length <= 1) {
+          if (hostControls) hostControls.classList.remove('hidden');
+          if (guestStatus) guestStatus.classList.add('hidden');
         } else {
-          hostControls.classList.add('hidden');
-          guestStatus.classList.remove('hidden');
-          hostResetBtn.classList.add('hidden');
-          backToLobbyBtn.classList.add('hidden');
+          if (hostControls) hostControls.classList.add('hidden');
+          if (guestStatus) guestStatus.classList.remove('hidden');
         }
       }
 
@@ -385,17 +403,23 @@ function connectWS() {
       if (data.mapWidth !== undefined) gameConfig.mapWidth = data.mapWidth;
       if (data.mapHeight !== undefined) gameConfig.mapHeight = data.mapHeight;
 
+      const wasMeNull = !me;
       me = serverPlayers.find(p => p.id === playerId);
       
       if (me) {
-        statLength.innerText = me.score;
-        statSpeed.innerText = me.boost ? 'BOOSTING' : 'NORMAL';
-        if (me.boost) {
-          boostIndicator.classList.add('active');
-          boostIndicator.innerText = 'BOOSTING';
-        } else {
-          boostIndicator.classList.remove('active');
-          boostIndicator.innerText = 'BOOST READY';
+        if (wasMeNull) {
+          targetAngle = me.angle;
+        }
+        if (statLength) statLength.innerText = me.score;
+        if (statSpeed) statSpeed.innerText = me.boost ? 'BOOSTING' : 'NORMAL';
+        if (boostIndicator) {
+          if (me.boost) {
+            boostIndicator.classList.add('active');
+            boostIndicator.innerText = 'BOOSTING';
+          } else {
+            boostIndicator.classList.remove('active');
+            boostIndicator.innerText = 'BOOST READY';
+          }
         }
       }
       updateLeaderboard();
@@ -408,21 +432,34 @@ function connectWS() {
 
 // Join the game lobby (pre-game)
 function joinLobby() {
-  if (!isConnected) return;
   initAudio();
-  const name = nicknameInput.value.trim() || 'Anonymous';
+  const name = nicknameInput ? nicknameInput.value.trim() || 'Anonymous' : 'Anonymous';
   localStorage.setItem('daWormNick', name);
 
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    if (connStatus) {
+      connStatus.innerHTML = '<span class="status-dot disconnected"></span> Connecting to server... please wait';
+    }
+    connectWS();
+    setTimeout(() => {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        joinLobby();
+      }
+    }, 400);
+    return;
+  }
+
+  hasJoined = true;
   socket.send(JSON.stringify({
     type: 'join',
     name: name,
     color: selectedColor
   }));
-  hasJoined = true;
 }
 
 // Render player list inside lobby
 function renderLobbyPlayers(playersList) {
+  if (!lobbyPlayersList) return;
   lobbyPlayersList.innerHTML = '';
   playersList.forEach(p => {
     const li = document.createElement('li');
@@ -513,6 +550,7 @@ function updateParticles() {
 
 // Kill Feed Overlay
 function showKillFeedMessage(htmlContent) {
+  if (!killFeed) return;
   const item = document.createElement('div');
   item.className = 'kill-msg';
   item.innerHTML = htmlContent;
@@ -556,30 +594,41 @@ function updateLeaderboard() {
 }
 
 // Input Controls
-window.addEventListener('mousemove', (e) => {
-  mouse.x = e.clientX;
-  mouse.y = e.clientY;
-  
-  if (!isDead && me) {
-    const centerX = window.innerWidth / 2;
-    const centerY = window.innerHeight / 2;
-    targetAngle = Math.atan2(mouse.y - centerY, mouse.x - centerX);
+function updateInputState() {
+  if (isDead || !me || currentGameState !== 'playing') return;
+
+  const turnLeft = keyState.left || touchState.left;
+  const turnRight = keyState.right || touchState.right;
+  const boost = keyState.boost || touchState.boost;
+
+  const TURN_SPEED = 0.075;
+
+  if (turnLeft && !turnRight) {
+    targetAngle -= TURN_SPEED;
+  } else if (turnRight && !turnLeft) {
+    targetAngle += TURN_SPEED;
   }
-});
+
+  targetAngle = Math.atan2(Math.sin(targetAngle), Math.cos(targetAngle));
+  isBoosting = boost;
+}
 
 window.addEventListener('mousedown', (e) => {
+  if (document.activeElement === nicknameInput) return;
   if (!isDead && e.button === 0) {
-    isBoosting = true;
+    keyState.boost = true;
   }
 });
 
 window.addEventListener('mouseup', (e) => {
   if (e.button === 0) {
-    isBoosting = false;
+    keyState.boost = false;
   }
 });
 
 window.addEventListener('keydown', (e) => {
+  if (document.activeElement === nicknameInput) return;
+
   // Catch Arrow Keys / WASD for switching spectated player
   if (spectatePlayerId !== null) {
     if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
@@ -593,25 +642,86 @@ window.addEventListener('keydown', (e) => {
     }
   }
 
-  if (e.code === 'Space') {
-    if (isDead) {
-      // Ignore spacer spawning during active games
-    } else {
-      isBoosting = true;
-    }
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+    keyState.left = true;
+    e.preventDefault();
+  }
+  if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+    keyState.right = true;
+    e.preventDefault();
+  }
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+    keyState.boost = true;
     e.preventDefault();
   }
 });
 
 window.addEventListener('keyup', (e) => {
-  if (e.code === 'Space') {
-    isBoosting = false;
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+    keyState.left = false;
+    e.preventDefault();
+  }
+  if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+    keyState.right = false;
+    e.preventDefault();
+  }
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+    keyState.boost = false;
     e.preventDefault();
   }
 });
 
+// Touch Controls for Mobile
+function handleTouches(e) {
+  if (isDead || currentGameState !== 'playing') {
+    touchState.left = false;
+    touchState.right = false;
+    touchState.boost = false;
+    return;
+  }
+
+  // Allow clicking buttons without triggering touch steering
+  if (e.target.closest('#exitMatchBtn') || e.target.closest('.hud-panel') || e.target.closest('#spectatorHud') || e.target.closest('#deathScreen')) {
+    return;
+  }
+
+  if (e.cancelable) {
+    e.preventDefault();
+  }
+
+  if (e.type === 'touchstart') {
+    initAudio();
+  }
+
+  let leftTouch = false;
+  let rightTouch = false;
+
+  for (let i = 0; i < e.touches.length; i++) {
+    const t = e.touches[i];
+    if (t.clientX < window.innerWidth / 2) {
+      leftTouch = true;
+    } else {
+      rightTouch = true;
+    }
+  }
+
+  touchState.left = leftTouch;
+  touchState.right = rightTouch;
+  touchState.boost = (leftTouch && rightTouch);
+}
+
+function updateTouchUI() {
+  // Silent touch state sync without visual overlays
+}
+
+window.addEventListener('touchstart', handleTouches, { passive: false });
+window.addEventListener('touchmove', handleTouches, { passive: false });
+window.addEventListener('touchend', handleTouches, { passive: false });
+window.addEventListener('touchcancel', handleTouches, { passive: false });
+
 // Stream inputs to server (30 Hz)
 setInterval(() => {
+  updateInputState();
   if (isConnected && !isDead && socket.readyState === WebSocket.OPEN && currentGameState === 'playing') {
     socket.send(JSON.stringify({
       type: 'input',
@@ -624,6 +734,7 @@ setInterval(() => {
 // Rendering Engine
 function render() {
   requestAnimationFrame(render);
+  updateInputState();
 
   ctx.fillStyle = '#f8fafc';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -719,6 +830,18 @@ function render() {
   if (followPlayer) {
     camera.x += (followPlayer.renderX - camera.x) * 0.1;
     camera.y += (followPlayer.renderY - camera.y) * 0.1;
+
+    let targetRot = -followPlayer.angle - Math.PI / 2;
+    let rotDiff = targetRot - camera.rotation;
+    rotDiff = Math.atan2(Math.sin(rotDiff), Math.cos(rotDiff));
+
+    // Smooth, delayed rotation tracking with capped angular velocity to eliminate motion sickness
+    const maxRotStep = 0.015;
+    let rotStep = rotDiff * 0.025;
+    if (Math.abs(rotStep) > maxRotStep) {
+      rotStep = Math.sign(rotStep) * maxRotStep;
+    }
+    camera.rotation += rotStep;
   } else {
     const time = Date.now() * 0.0003;
     const pathRadius = 200;
@@ -726,64 +849,76 @@ function render() {
     const mapCenterY = gameConfig.mapHeight / 2;
     camera.x += (mapCenterX + Math.cos(time) * pathRadius - camera.x) * 0.02;
     camera.y += (mapCenterY + Math.sin(time) * pathRadius - camera.y) * 0.02;
+
+    let rotDiff = 0 - camera.rotation;
+    rotDiff = Math.atan2(Math.sin(rotDiff), Math.cos(rotDiff));
+    camera.rotation += rotDiff * 0.02;
   }
 
-  const offsetX = canvas.width / 2 - camera.x;
-  const offsetY = canvas.height / 2 - camera.y;
+  ctx.save();
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate(camera.rotation);
+  ctx.translate(-camera.x, -camera.y);
 
-  drawGrid(offsetX, offsetY);
-  drawBoundaries(offsetX, offsetY);
+  drawGrid();
+  drawBoundaries();
   
   if (currentGameState === 'playing') {
-    drawFood(offsetX, offsetY);
+    drawFood();
   }
 
   updateParticles();
-  drawParticles(offsetX, offsetY);
+  drawParticles();
 
   if (currentGameState === 'playing') {
-    drawWorms(offsetX, offsetY);
+    drawWorms();
+  }
+
+  ctx.restore();
+
+  if (currentGameState === 'playing') {
     drawMinimap();
   }
 }
 
-function drawGrid(offsetX, offsetY) {
+function drawGrid() {
   ctx.strokeStyle = 'rgba(0, 0, 0, 0.05)';
   ctx.lineWidth = 1;
   const gridSize = 100;
+  const diag = Math.hypot(canvas.width, canvas.height);
 
-  const startY = Math.floor((-offsetY) / gridSize) * gridSize;
-  const endY = startY + canvas.height + gridSize;
-  for (let y = startY; y < endY; y++) {
-    if (y >= 0 && y <= gameConfig.mapHeight) {
-      ctx.beginPath();
-      ctx.moveTo(0, y + offsetY);
-      ctx.lineTo(canvas.width, y + offsetY);
-      ctx.stroke();
-    }
+  const startY = Math.max(0, Math.floor((camera.y - diag / 2) / gridSize) * gridSize);
+  const endY = Math.min(gameConfig.mapHeight, Math.ceil((camera.y + diag / 2) / gridSize) * gridSize);
+  
+  const startX = Math.max(0, Math.floor((camera.x - diag / 2) / gridSize) * gridSize);
+  const endX = Math.min(gameConfig.mapWidth, Math.ceil((camera.x + diag / 2) / gridSize) * gridSize);
+
+  for (let y = startY; y <= endY; y += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(startX, y);
+    ctx.lineTo(endX, y);
+    ctx.stroke();
   }
 
-  const startX = Math.floor((-offsetX) / gridSize) * gridSize;
-  const endX = startX + canvas.width + gridSize;
-  for (let x = startX; x < endX; x++) {
-    if (x >= 0 && x <= gameConfig.mapWidth) {
-      ctx.beginPath();
-      ctx.moveTo(x + offsetX, 0);
-      ctx.lineTo(x + offsetX, canvas.height);
-      ctx.stroke();
-    }
+  for (let x = startX; x <= endX; x += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(x, startY);
+    ctx.lineTo(x, endY);
+    ctx.stroke();
   }
 }
 
-function drawBoundaries(offsetX, offsetY) {
+function drawBoundaries() {
   ctx.strokeStyle = '#FF595E';
   ctx.lineWidth = 12;
-  ctx.strokeRect(offsetX, offsetY, gameConfig.mapWidth, gameConfig.mapHeight);
+  ctx.strokeRect(0, 0, gameConfig.mapWidth, gameConfig.mapHeight);
 }
 
-function drawFood(offsetX, offsetY) {
+function drawFood() {
+  const diag = Math.hypot(canvas.width, canvas.height);
+  const halfDiag = diag / 2;
+
   foodMap.forEach((pellet, id) => {
-    // Process client-side visual eating sync to hide latency
     if (pellet.isPendingEat) {
       const player = clientPlayers.get(pellet.eatenByPlayerId);
       let shouldRemove = false;
@@ -795,7 +930,7 @@ function drawFood(offsetX, offsetY) {
           shouldRemove = true;
         }
       } else {
-        shouldRemove = true; // player disconnected
+        shouldRemove = true;
       }
 
       if (shouldRemove) {
@@ -804,36 +939,36 @@ function drawFood(offsetX, offsetY) {
           playEatSound();
         }
         foodMap.delete(id);
-        return; // skip drawing
+        return;
       }
     }
 
-    const screenX = pellet.x + offsetX;
-    const screenY = pellet.y + offsetY;
     const radius = 4 + pellet.value * 2;
-
-    if (screenX + radius > 0 && screenX - radius < canvas.width &&
-        screenY + radius > 0 && screenY - radius < canvas.height) {
+    if (Math.abs(pellet.x - camera.x) < halfDiag + radius &&
+        Math.abs(pellet.y - camera.y) < halfDiag + radius) {
       ctx.fillStyle = pellet.color;
       ctx.beginPath();
-      ctx.arc(screenX, screenY, radius, 0, Math.PI * 2);
+      ctx.arc(pellet.x, pellet.y, radius, 0, Math.PI * 2);
       ctx.fill();
     }
   });
 }
 
-function drawParticles(offsetX, offsetY) {
+function drawParticles() {
   particles.forEach((p) => {
     ctx.fillStyle = p.color;
     ctx.globalAlpha = p.alpha;
     ctx.beginPath();
-    ctx.arc(p.x + offsetX, p.y + offsetY, p.radius, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
     ctx.fill();
   });
   ctx.globalAlpha = 1.0;
 }
 
-function drawWorms(offsetX, offsetY) {
+function drawWorms() {
+  const diag = Math.hypot(canvas.width, canvas.height);
+  const halfDiag = diag / 2;
+
   clientPlayers.forEach((player) => {
     const baseRadius = 12;
     ctx.shadowBlur = 0;
@@ -843,28 +978,26 @@ function drawWorms(offsetX, offsetY) {
       const ratio = 1 - (i / player.renderBody.length) * 0.4;
       const radius = baseRadius * ratio;
 
-      const screenX = seg.x + offsetX;
-      const screenY = seg.y + offsetY;
-      if (screenX + radius > 0 && screenX - radius < canvas.width &&
-          screenY + radius > 0 && screenY - radius < canvas.height) {
+      if (Math.abs(seg.x - camera.x) < halfDiag + radius &&
+          Math.abs(seg.y - camera.y) < halfDiag + radius) {
 
         ctx.fillStyle = player.color;
         ctx.beginPath();
-        ctx.arc(screenX, screenY, radius, 0, Math.PI * 2);
+        ctx.arc(seg.x, seg.y, radius, 0, Math.PI * 2);
         ctx.fill();
         
         ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
         ctx.beginPath();
-        ctx.arc(screenX - radius * 0.3, screenY - radius * 0.3, radius * 0.3, 0, Math.PI * 2);
+        ctx.arc(seg.x - radius * 0.3, seg.y - radius * 0.3, radius * 0.3, 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
-    const headX = player.renderX + offsetX;
-    const headY = player.renderY + offsetY;
+    const headX = player.renderX;
+    const headY = player.renderY;
 
-    if (headX + baseRadius > 0 && headX - baseRadius < canvas.width &&
-        headY + baseRadius > 0 && headY - baseRadius < canvas.height) {
+    if (Math.abs(headX - camera.x) < halfDiag + baseRadius &&
+        Math.abs(headY - camera.y) < halfDiag + baseRadius) {
       
       if (player.isInvulnerable) {
         ctx.beginPath();
@@ -885,7 +1018,6 @@ function drawWorms(offsetX, offsetY) {
       ctx.arc(headX - baseRadius * 0.3, headY - baseRadius * 0.3, baseRadius * 0.3, 0, Math.PI * 2);
       ctx.fill();
 
-      const eyeSpacing = 6;
       const eyeOffset = 5;
       const eyeRadius = 3.5;
       const pupilRadius = 1.5;
@@ -913,14 +1045,18 @@ function drawWorms(offsetX, offsetY) {
       ctx.arc(rightEyeX + pupilShiftX, rightEyeY + pupilShiftY, pupilRadius, 0, Math.PI * 2);
       ctx.fill();
 
+      ctx.save();
+      ctx.translate(headX, headY);
+      ctx.rotate(-camera.rotation);
       ctx.font = 'bold 13px Yuyu';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 3.5;
-      ctx.strokeText(player.name, headX, headY - baseRadius - 6);
+      ctx.strokeText(player.name, 0, -baseRadius - 6);
       ctx.fillStyle = '#0f172a';
-      ctx.fillText(player.name, headX, headY - baseRadius - 6);
+      ctx.fillText(player.name, 0, -baseRadius - 6);
+      ctx.restore();
     }
   });
 }
@@ -939,17 +1075,30 @@ function drawMinimap() {
 
     mCtx.fillStyle = player.color;
     mCtx.beginPath();
-    if (player.id === playerId) {
+    if (player.id === playerId || player.id === spectatePlayerId) {
       const flash = (Math.sin(Date.now() * 0.015) > 0);
-      mCtx.arc(rx, ry, flash ? 4.5 : 3, 0, Math.PI * 2);
+      mCtx.arc(rx, ry, flash ? 5 : 3.5, 0, Math.PI * 2);
+      mCtx.fill();
+
+      // Heading indicator vector on minimap
+      mCtx.strokeStyle = player.color;
+      mCtx.lineWidth = 2;
+      mCtx.beginPath();
+      mCtx.moveTo(rx, ry);
+      mCtx.lineTo(rx + Math.cos(player.angle) * 10, ry + Math.sin(player.angle) * 10);
+      mCtx.stroke();
     } else {
-      mCtx.arc(rx, ry, 2, 0, Math.PI * 2);
+      mCtx.arc(rx, ry, 2.5, 0, Math.PI * 2);
+      mCtx.fill();
     }
-    mCtx.fill();
   });
 }
 
-window.onload = initLobby;
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initLobby);
+} else {
+  initLobby();
+}
 render();
 
 // Spectator Mode Logic

@@ -167,8 +167,8 @@ wss.on('connection', (ws) => {
         const name = (data.name || 'Anonymous').substring(0, 15);
         const color = data.color || getRandomColor();
 
-        // Assign host if first to join
-        if (!hostId) {
+        // Assign host if no active host exists in players map
+        if (!hostId || !players.has(hostId)) {
           hostId = playerId;
         }
 
@@ -195,7 +195,6 @@ wss.on('connection', (ws) => {
           isReady: false,
         };
 
-        // If joining during active gameplay, populate body segments immediately
         if (gameState === 'playing') {
           for (let i = 0; i < 10; i++) {
             playerState.body.push({
@@ -208,7 +207,6 @@ wss.on('connection', (ws) => {
         players.set(playerId, playerState);
         playerJoined = true;
 
-        // Initialize client configuration
         ws.send(JSON.stringify({
           type: 'init',
           playerId,
@@ -217,7 +215,7 @@ wss.on('connection', (ws) => {
             mapHeight: currentMapHeight,
             spawnShield: SPAWN_SHIELD_DURATION,
           },
-          gameState, // Expose ongoing game state to client
+          gameState,
           foodList: Array.from(food.values()),
         }));
 
@@ -225,9 +223,11 @@ wss.on('connection', (ws) => {
         console.log(`Player ${name} (${playerId}) joined the lobby.`);
 
       } else if (data.type === 'start_game') {
-        // Only host can start game
-        if (playerId === hostId && gameState === 'lobby') {
-          console.log('Host triggered game start!');
+        if (!hostId || !players.has(hostId)) {
+          hostId = playerId;
+        }
+        if ((playerId === hostId || players.size === 1) && gameState === 'lobby') {
+          console.log(`Game start triggered by player ${playerId}!`);
           
           gameState = 'playing';
           currentMapWidth = MAP_WIDTH;
@@ -235,7 +235,6 @@ wss.on('connection', (ws) => {
           matchStartTime = Date.now();
           hasBroadcastShrinkStart = false;
           
-          // Initialize and spawn all lobby players
           players.forEach((player) => {
             const startX = Math.random() * (MAP_WIDTH - 400) + 200;
             const startY = Math.random() * (MAP_HEIGHT - 400) + 200;
@@ -271,10 +270,8 @@ wss.on('connection', (ws) => {
           player.boost = !!data.boost;
         }
       } else if (data.type === 'back_to_lobby') {
-        if (playerId === hostId) {
-          console.log('Host reset the arena back to lobby.');
-          resetToLobby();
-        }
+        console.log(`Player ${playerId} requested back to lobby.`);
+        resetToLobby();
       }
     } catch (err) {
       console.error('Error handling message:', err);
