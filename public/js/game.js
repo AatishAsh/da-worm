@@ -13,6 +13,8 @@ let me = null;
 let serverPlayers = [];
 let clientPlayers = new Map();
 let foodMap = new Map();
+let bulletPickupsMap = new Map();
+let flyingProjectiles = [];
 let gameConfig = { mapWidth: 2500, mapHeight: 2500, spawnShield: 3000 };
 let isConnected = false;
 let isDead = true;
@@ -64,6 +66,8 @@ const statLength = document.getElementById('statLength');
 const statSpeed = document.getElementById('statSpeed');
 const boostIndicator = document.getElementById('boostIndicator');
 const killFeed = document.getElementById('killFeed');
+const ammoStatusText = document.getElementById('ammoStatusText');
+const shootBtn = document.getElementById('shootBtn');
 
 const exitMatchBtn = document.getElementById('exitMatchBtn');
 const deathScreen = document.getElementById('deathScreen');
@@ -77,6 +81,12 @@ const specPlayerName = document.getElementById('specPlayerName');
 const specPrevBtn = document.getElementById('specPrevBtn');
 const specNextBtn = document.getElementById('specNextBtn');
 const specExitBtn = document.getElementById('specExitBtn');
+
+function triggerShoot() {
+  if (isConnected && !isDead && socket && socket.readyState === WebSocket.OPEN && me && me.ammo > 0 && currentGameState === 'playing') {
+    socket.send(JSON.stringify({ type: 'shoot' }));
+  }
+}
 
 // Initialize Lobby UX
 function initLobby() {
@@ -159,6 +169,21 @@ function initLobby() {
     });
   }
 
+  if (shootBtn) {
+    shootBtn.addEventListener('click', triggerShoot);
+    shootBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      triggerShoot();
+    });
+  }
+
+  window.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    if (!isDead && currentGameState === 'playing') {
+      triggerShoot();
+    }
+  });
+
   if (spectateBtn) spectateBtn.addEventListener('click', startSpectating);
   if (specExitBtn) specExitBtn.addEventListener('click', stopSpectating);
   if (specPrevBtn) specPrevBtn.addEventListener('click', () => switchSpectate(-1));
@@ -200,6 +225,63 @@ function playEatSound() {
   
   osc.start();
   osc.stop(audioCtx.currentTime + 0.08);
+}
+
+function playShootSound() {
+  if (!audioCtx) return;
+  initAudio();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(150, audioCtx.currentTime + 0.12);
+  
+  gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+  gain.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+  
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.12);
+}
+
+function playPickupAmmoSound() {
+  if (!audioCtx) return;
+  initAudio();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+  osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.08);
+  
+  gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+  gain.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.16);
+  
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.16);
+}
+
+function playBulletHitSound() {
+  if (!audioCtx) return;
+  initAudio();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  
+  osc.type = 'square';
+  osc.frequency.setValueAtTime(220, audioCtx.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.15);
+  
+  gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+  gain.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+  
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.15);
 }
 
 function playDeathSound() {
@@ -283,6 +365,13 @@ function connectWS() {
       data.foodList.forEach(item => {
         foodMap.set(item.id, item);
       });
+
+      bulletPickupsMap.clear();
+      if (data.bulletPickupsList) {
+        data.bulletPickupsList.forEach(item => {
+          bulletPickupsMap.set(item.id, item);
+        });
+      }
       
       lobbyScreen.classList.add('hidden');
       
@@ -333,11 +422,18 @@ function connectWS() {
       particles = [];
       spectatePlayerId = null;
       
-      // Load refreshed food list for the new round
+      // Load refreshed food & bullet lists for the new round
       foodMap.clear();
       if (data.foodList) {
         data.foodList.forEach(item => {
           foodMap.set(item.id, item);
+        });
+      }
+
+      bulletPickupsMap.clear();
+      if (data.bulletPickupsList) {
+        data.bulletPickupsList.forEach(item => {
+          bulletPickupsMap.set(item.id, item);
         });
       }
       
@@ -356,6 +452,39 @@ function connectWS() {
       if (pellet) {
         pellet.isPendingEat = true;
         pellet.eatenByPlayerId = data.playerId;
+      }
+
+    } else if (data.type === 'spawn_bullet_pickup') {
+      bulletPickupsMap.set(data.pickup.id, data.pickup);
+
+    } else if (data.type === 'eat_bullet_pickup') {
+      bulletPickupsMap.delete(data.id);
+      if (data.playerId === playerId) {
+        playPickupAmmoSound();
+      }
+
+    } else if (data.type === 'player_shot') {
+      playShootSound();
+      if (data.projectile) {
+        spawnMuzzleParticles(data.projectile.x, data.projectile.y, data.projectile.vx, data.projectile.vy);
+      }
+
+    } else if (data.type === 'bullet_headshot') {
+      playBulletHitSound();
+      spawnHitParticles(data.x, data.y, '#FF595E');
+      if (data.shooterId === playerId) {
+        showKillFeedMessage(`🎯 <strong>HEADSHOT!</strong> You sniped <strong>${data.victimName}</strong>!`);
+      } else {
+        showKillFeedMessage(`🎯 <strong>${data.shooterName}</strong> HEADSHOT <strong>${data.victimName}</strong>!`);
+      }
+
+    } else if (data.type === 'bullet_bodyhit') {
+      playBulletHitSound();
+      spawnHitParticles(data.x, data.y, '#FFCA3A');
+      if (data.shooterId === playerId) {
+        showKillFeedMessage(`💥 You blasted <strong>${data.cutCount}</strong> segments off <strong>${data.victimName}</strong>!`);
+      } else {
+        showKillFeedMessage(`💥 <strong>${data.shooterName}</strong> severed <strong>${data.victimName}</strong>'s mass!`);
       }
 
     } else if (data.type === 'player_left') {
@@ -398,6 +527,15 @@ function connectWS() {
 
     } else if (data.type === 'state') {
       serverPlayers = data.players;
+
+      if (data.bulletPickups) {
+        bulletPickupsMap.clear();
+        data.bulletPickups.forEach(bp => bulletPickupsMap.set(bp.id, bp));
+      }
+
+      if (data.projectiles) {
+        flyingProjectiles = data.projectiles;
+      }
       
       // Update dynamic shrinking border dimensions
       if (data.mapWidth !== undefined) gameConfig.mapWidth = data.mapWidth;
@@ -419,6 +557,23 @@ function connectWS() {
           } else {
             boostIndicator.classList.remove('active');
             boostIndicator.innerText = 'BOOST READY';
+          }
+        }
+        const ammoCount = me.ammo !== undefined ? me.ammo : 0;
+        if (ammoStatusText) {
+          if (ammoCount > 0) {
+            ammoStatusText.innerText = `🔫 ${ammoCount} / 1`;
+            ammoStatusText.className = 'ammo-badge ready';
+          } else {
+            ammoStatusText.innerText = `🔫 0 / 1`;
+            ammoStatusText.className = 'ammo-badge empty';
+          }
+        }
+        if (shootBtn) {
+          if (ammoCount > 0) {
+            shootBtn.className = 'shoot-btn ready';
+          } else {
+            shootBtn.className = 'shoot-btn empty';
           }
         }
       }
@@ -640,6 +795,12 @@ window.addEventListener('keydown', (e) => {
       e.preventDefault();
       return;
     }
+  }
+
+  if (e.code === 'KeyF' || e.code === 'KeyE') {
+    triggerShoot();
+    e.preventDefault();
+    return;
   }
 
   if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
@@ -865,6 +1026,8 @@ function render() {
   
   if (currentGameState === 'playing') {
     drawFood();
+    drawBulletPickups();
+    drawBulletProjectiles();
   }
 
   updateParticles();
@@ -879,6 +1042,59 @@ function render() {
   if (currentGameState === 'playing') {
     drawMinimap();
   }
+}
+
+function drawBulletPickups() {
+  const diag = Math.hypot(canvas.width, canvas.height);
+  const halfDiag = diag / 2;
+  const time = Date.now() * 0.004;
+
+  bulletPickupsMap.forEach((bp) => {
+    if (Math.abs(bp.x - camera.x) < halfDiag + 30 &&
+        Math.abs(bp.y - camera.y) < halfDiag + 30) {
+      const floatY = bp.y + Math.sin(time + bp.x) * 3;
+
+      // Outer glowing pulse aura
+      ctx.beginPath();
+      const pulse = 13 + Math.sin(time * 3) * 3;
+      ctx.fillStyle = 'rgba(255, 202, 58, 0.25)';
+      ctx.arc(bp.x, floatY, pulse, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Dash shape pickup icon
+      ctx.save();
+      ctx.strokeStyle = '#FFCA3A';
+      ctx.lineWidth = 6;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(bp.x - 8, floatY);
+      ctx.lineTo(bp.x + 8, floatY);
+      ctx.stroke();
+      ctx.restore();
+    }
+  });
+}
+
+function drawBulletProjectiles() {
+  flyingProjectiles.forEach((proj) => {
+    const angle = Math.atan2(proj.vy, proj.vx);
+    const dashLength = 20;
+
+    ctx.save();
+    ctx.translate(proj.x, proj.y);
+    ctx.rotate(angle);
+
+    // Simple single-color dash shape
+    ctx.strokeStyle = '#FFCA3A';
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-dashLength / 2, 0);
+    ctx.lineTo(dashLength / 2, 0);
+    ctx.stroke();
+
+    ctx.restore();
+  });
 }
 
 function drawGrid() {
@@ -985,11 +1201,6 @@ function drawWorms() {
         ctx.beginPath();
         ctx.arc(seg.x, seg.y, radius, 0, Math.PI * 2);
         ctx.fill();
-        
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-        ctx.beginPath();
-        ctx.arc(seg.x - radius * 0.3, seg.y - radius * 0.3, radius * 0.3, 0, Math.PI * 2);
-        ctx.fill();
       }
     }
 
@@ -1011,11 +1222,6 @@ function drawWorms() {
       ctx.fillStyle = player.color;
       ctx.beginPath();
       ctx.arc(headX, headY, baseRadius, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-      ctx.beginPath();
-      ctx.arc(headX - baseRadius * 0.3, headY - baseRadius * 0.3, baseRadius * 0.3, 0, Math.PI * 2);
       ctx.fill();
 
       const eyeOffset = 5;

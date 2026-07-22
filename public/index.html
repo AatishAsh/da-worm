@@ -44,10 +44,11 @@
       <div class="info-section">
         <h3>How to Play</h3>
         <p>🎮 Press <strong>Left / Right Arrows</strong> or <strong>A / D keys</strong> to steer.</p>
-        <p>📱 Tap <strong>Left / Right side of screen</strong> on mobile devices.</p>
-        <p>🎥 Camera rotates automatically so steering left/right is always relative to your screen!</p>
-        <p>⚡ Hold <strong>Spacebar</strong>, <strong>W / Up Arrow</strong>, or <strong>Boost button</strong> to BOOST.</p>
-        <p>💥 Force other players to headbutt your trailing body to destroy them!</p>
+        <p>⚡ Hold <strong>W / Up Arrow</strong> or <strong>Spacebar</strong> to BOOST.</p>
+        <p>🔫 Press <strong>F</strong>, <strong>E</strong>, <strong>Right-Click</strong> or tap <strong>SHOOT</strong> to fire bullets!</p>
+        <p>🎯 <strong>HEADSHOT</strong>: Hitting player head kills them instantly!</p>
+        <p>💥 <strong>BODY SHOT</strong>: Hitting player body severs and drops their tail mass!</p>
+        <p>🚫 <strong>Max 1 Bullet</strong>: Ammo capacity is capped at 1 (non-stackable).</p>
       </div>
 
       <div class="connection-status" id="connStatus">
@@ -92,12 +93,28 @@
       </svg>
     </button>
 
+    <!-- Kill Feed Overlay -->
+    <div id="killFeed" class="kill-feed"></div>
+
     <!-- Leaderboard -->
     <div class="hud-panel leaderboard-panel">
       <h3>Leaderboard</h3>
       <ol id="leaderboardList">
         <!-- Injected via JS -->
       </ol>
+    </div>
+
+    <!-- Ammo & Shoot Control Panel -->
+    <div class="hud-panel ammo-panel">
+      <div class="ammo-header">
+        <span class="ammo-label">AMMO</span>
+        <span id="ammoStatusText" class="ammo-badge ready">🔫 1 / 1</span>
+      </div>
+      <button id="shootBtn" class="shoot-btn ready" title="Shoot Bullet (Key: F / E / Right Click)">
+        <span class="shoot-btn-icon">🔫</span>
+        <span class="shoot-btn-text">SHOOT</span>
+        <span class="shoot-btn-key">[F]</span>
+      </button>
     </div>
 
     <!-- Minimap Panel -->

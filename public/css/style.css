@@ -673,6 +673,112 @@ input[type="text"]:focus {
   transform: scale(0.95);
 }
 
+/* Ammo & Shoot Panel */
+.ammo-panel {
+  bottom: 20px;
+  left: 20px;
+  width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 3px solid var(--border-color);
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.ammo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ammo-label {
+  font-size: 0.75rem;
+  font-weight: 900;
+  color: var(--text-secondary);
+  letter-spacing: 1px;
+}
+
+.ammo-badge {
+  font-size: 0.85rem;
+  font-weight: 900;
+  padding: 4px 8px;
+  border-radius: 8px;
+  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
+}
+
+.ammo-badge.ready {
+  background: rgba(138, 201, 38, 0.15);
+  border: 1.5px solid var(--green);
+  color: #4b7a00;
+}
+
+.ammo-badge.empty {
+  background: rgba(100, 116, 139, 0.1);
+  border: 1.5px solid #94a3b8;
+  color: #64748b;
+}
+
+.shoot-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  font-family: 'Yuyu', sans-serif;
+  font-weight: 900;
+  font-size: 1.05rem;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+  pointer-events: auto;
+}
+
+.shoot-btn.ready {
+  background: linear-gradient(135deg, #FFCA3A, #FF595E);
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(255, 89, 94, 0.35);
+  animation: pulseReady 2s infinite alternate;
+}
+
+@keyframes pulseReady {
+  from { box-shadow: 0 4px 16px rgba(255, 89, 94, 0.35); }
+  to { box-shadow: 0 4px 22px rgba(255, 202, 58, 0.65); }
+}
+
+.shoot-btn.ready:hover {
+  transform: translateY(-2px) scale(1.03);
+  filter: brightness(1.08);
+}
+
+.shoot-btn.ready:active {
+  transform: translateY(1px) scale(0.97);
+}
+
+.shoot-btn.empty {
+  background: #e2e8f0;
+  color: #94a3b8;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.shoot-btn-icon {
+  font-size: 1.15rem;
+}
+
+.shoot-btn-key {
+  font-size: 0.75rem;
+  opacity: 0.85;
+  background: rgba(0, 0, 0, 0.15);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
 /* Invisible Mobile Touch Steering Zones */
 .mobile-controls {
   position: absolute;

@@ -20,6 +20,8 @@ const BASE_SPEED = 3.5;
 const BOOST_SPEED = 6.5;
 const WORM_RADIUS = 12;
 const FOOD_COUNT = 250;
+const BULLET_PICKUP_COUNT = 12;
+const MAX_PLAYER_AMMO = 1; // Non-stackable bullet capacity
 const SPAWN_SHIELD_DURATION = 3000;
 const TURN_RATE = 0.15;
 
@@ -28,11 +30,15 @@ let gameState = 'lobby'; // 'lobby' or 'playing'
 let hostId = null;
 const players = new Map(); // id -> player object
 const food = new Map(); // id -> food object
+const bulletPickups = new Map(); // id -> bullet pickup object
+const bulletProjectiles = new Map(); // id -> flying bullet projectile
 let currentMapWidth = MAP_WIDTH;
 let currentMapHeight = MAP_HEIGHT;
 let matchStartTime = 0;
 let hasBroadcastShrinkStart = false;
 let foodIdCounter = 0;
+let bulletIdCounter = 0;
+let projIdCounter = 0;
 
 // Serve static assets
 app.use(express.static(path.join(__dirname, 'public')));
@@ -76,22 +82,71 @@ function getSafeFoodPosition() {
   };
 }
 
+function getSafeBulletPosition() {
+  let attempts = 0;
+  while (attempts < 25) {
+    const x = Math.random() * (currentMapWidth - 100) + 50;
+    const y = Math.random() * (currentMapHeight - 100) + 50;
+    
+    let tooClose = false;
+    for (const player of players.values()) {
+      if (player.isDead) continue;
+      const dist = Math.hypot(player.x - x, player.y - y);
+      if (dist < 150) {
+        tooClose = true;
+        break;
+      }
+    }
+    
+    if (!tooClose) {
+      return { x, y };
+    }
+    attempts++;
+  }
+  return {
+    x: Math.random() * (currentMapWidth - 100) + 50,
+    y: Math.random() * (currentMapHeight - 100) + 50
+  };
+}
+
 function spawnFood(count) {
   for (let i = 0; i < count; i++) {
     const id = `f_${foodIdCounter++}`;
     const pos = getSafeFoodPosition();
-    const isBig = (i < 5); // Start with exactly 5 big gold dots in the arena
+    let value = 1;
+    let color = getRandomColor();
+
+    if (i < 5) {
+      value = 10;
+      color = '#FFCA3A'; // Big gold 10-point dot
+    } else if (i < 40) {
+      value = 5; // Medium 5-point dot (spawned in all colors)
+    }
+
     food.set(id, {
       id,
       x: pos.x,
       y: pos.y,
-      color: isBig ? '#FFCA3A' : getRandomColor(),
-      value: isBig ? 10 : 1, // Big dots are worth 10 segments
+      color,
+      value,
+    });
+  }
+}
+
+function spawnBulletPickups(count) {
+  for (let i = 0; i < count; i++) {
+    const id = `bp_${bulletIdCounter++}`;
+    const pos = getSafeBulletPosition();
+    bulletPickups.set(id, {
+      id,
+      x: pos.x,
+      y: pos.y,
     });
   }
 }
 
 spawnFood(FOOD_COUNT);
+spawnBulletPickups(BULLET_PICKUP_COUNT);
 
 function getLocalIPs() {
   const nets = networkInterfaces();
@@ -141,13 +196,17 @@ function sendLobbyUpdate() {
 function resetToLobby() {
   gameState = 'lobby';
   food.clear();
+  bulletPickups.clear();
+  bulletProjectiles.clear();
   spawnFood(FOOD_COUNT);
+  spawnBulletPickups(BULLET_PICKUP_COUNT);
   
   players.forEach((player) => {
     player.isDead = false;
     player.body = [];
     player.score = 0;
     player.boost = false;
+    player.ammo = 1; // Reset to 1 bullet on spawn
   });
   
   sendLobbyUpdate();
@@ -189,6 +248,7 @@ wss.on('connection', (ws) => {
           score: 10,
           body: [],
           boost: false,
+          ammo: 1, // Spawn with 1 bullet (non-stackable max 1)
           isDead: false,
           spawnTime: gameState === 'playing' ? Date.now() : 0,
           lastBoostTick: 0,
@@ -217,6 +277,7 @@ wss.on('connection', (ws) => {
           },
           gameState,
           foodList: Array.from(food.values()),
+          bulletPickupsList: Array.from(bulletPickups.values()),
         }));
 
         sendLobbyUpdate();
@@ -247,6 +308,7 @@ wss.on('connection', (ws) => {
             player.isDead = false;
             player.spawnTime = Date.now();
             player.score = 10;
+            player.ammo = 1; // Reset to 1 bullet on match start
             
             player.body = [];
             for (let i = 0; i < 10; i++) {
@@ -259,7 +321,8 @@ wss.on('connection', (ws) => {
 
           broadcast({
             type: 'game_start',
-            foodList: Array.from(food.values())
+            foodList: Array.from(food.values()),
+            bulletPickupsList: Array.from(bulletPickups.values()),
           });
         }
 
@@ -268,6 +331,38 @@ wss.on('connection', (ws) => {
         if (player && !player.isDead && gameState === 'playing') {
           player.targetAngle = data.angle;
           player.boost = !!data.boost;
+        }
+      } else if (data.type === 'shoot' && playerJoined) {
+        const player = players.get(playerId);
+        if (player && !player.isDead && gameState === 'playing' && player.ammo > 0) {
+          player.ammo--; // Consume bullet
+          
+          const speed = 18;
+          const startOffset = player.radius + 12;
+          const bulletX = player.x + Math.cos(player.angle) * startOffset;
+          const bulletY = player.y + Math.sin(player.angle) * startOffset;
+          
+          const pId = `proj_${projIdCounter++}`;
+          const projectile = {
+            id: pId,
+            shooterId: player.id,
+            shooterName: player.name,
+            x: bulletX,
+            y: bulletY,
+            vx: Math.cos(player.angle) * speed,
+            vy: Math.sin(player.angle) * speed,
+            radius: 6,
+            life: 80,
+            spawnTime: Date.now()
+          };
+          
+          bulletProjectiles.set(pId, projectile);
+          
+          broadcast({
+            type: 'player_shot',
+            shooterId: player.id,
+            projectile,
+          });
         }
       } else if (data.type === 'back_to_lobby') {
         console.log(`Player ${playerId} requested back to lobby.`);
@@ -427,6 +522,7 @@ setInterval(() => {
       body: player.body.flatMap(seg => [Math.round(seg.x), Math.round(seg.y)]),
       score: player.score,
       boost: player.boost,
+      ammo: player.ammo,
       isInvulnerable,
     });
   });
@@ -456,13 +552,23 @@ setInterval(() => {
           if (gameState === 'playing') {
             const newFoodId = `f_${foodIdCounter++}`;
             const pos = getSafeFoodPosition();
-            const isBig = Math.random() < 0.03; // 3% chance for replacement to be a big gold dot
+            const rand = Math.random();
+            let value = 1;
+            let color = getRandomColor();
+
+            if (rand < 0.03) {
+              value = 10;
+              color = '#FFCA3A'; // 3% 10-point gold dot
+            } else if (rand < 0.20) {
+              value = 5; // 17% 5-point dot in any color
+            }
+
             const newPellet = {
               id: newFoodId,
               x: pos.x,
               y: pos.y,
-              color: isBig ? '#FFCA3A' : getRandomColor(),
-              value: isBig ? 10 : 1,
+              color,
+              value,
             };
             food.set(newFoodId, newPellet);
             broadcast({ type: 'spawn_food', food: newPellet });
@@ -470,6 +576,133 @@ setInterval(() => {
         }, 5000); // 5 seconds delay
       }
     });
+  });
+
+  // Collision Detection: Bullet Pickups (Non-stackable, Max 1 Ammo)
+  players.forEach((player) => {
+    if (player.isDead) return;
+
+    bulletPickups.forEach((pickup) => {
+      const dist = Math.hypot(player.x - pickup.x, player.y - pickup.y);
+      const pickupRadius = 12;
+      const eatThreshold = player.radius + pickupRadius;
+
+      if (dist < eatThreshold) {
+        if (player.ammo < MAX_PLAYER_AMMO) {
+          player.ammo = MAX_PLAYER_AMMO;
+          bulletPickups.delete(pickup.id);
+          broadcast({ type: 'eat_bullet_pickup', id: pickup.id, playerId: player.id });
+
+          setTimeout(() => {
+            if (gameState === 'playing') {
+              const newId = `bp_${bulletIdCounter++}`;
+              const pos = getSafeBulletPosition();
+              const newPickup = { id: newId, x: pos.x, y: pos.y };
+              bulletPickups.set(newId, newPickup);
+              broadcast({ type: 'spawn_bullet_pickup', pickup: newPickup });
+            }
+          }, 6000);
+        }
+      }
+    });
+  });
+
+  // Update Flying Bullet Projectiles & Handle Head/Body Collisions
+  const projectilesList = [];
+  bulletProjectiles.forEach((proj, projId) => {
+    proj.x += proj.vx;
+    proj.y += proj.vy;
+    proj.life--;
+
+    if (proj.life <= 0 ||
+        proj.x < 0 || proj.x > currentMapWidth ||
+        proj.y < 0 || proj.y > currentMapHeight) {
+      bulletProjectiles.delete(projId);
+      return;
+    }
+
+    let hit = false;
+    players.forEach((targetPlayer) => {
+      if (hit || targetPlayer.isDead) return;
+
+      const targetInvulnerable = now - targetPlayer.spawnTime < SPAWN_SHIELD_DURATION;
+      if (targetInvulnerable) return;
+
+      // Shooter grace period (first 5 ticks after firing)
+      if (targetPlayer.id === proj.shooterId && proj.life > 75) return;
+
+      // 1. Head Collision Check -> HEAD HIT = PLAYER DIES!
+      const headDist = Math.hypot(proj.x - targetPlayer.x, proj.y - targetPlayer.y);
+      if (headDist < targetPlayer.radius + proj.radius + 2) {
+        hit = true;
+        bulletProjectiles.delete(projId);
+
+        killPlayer(targetPlayer, proj.shooterName);
+        broadcast({
+          type: 'bullet_headshot',
+          shooterId: proj.shooterId,
+          shooterName: proj.shooterName,
+          victimId: targetPlayer.id,
+          victimName: targetPlayer.name,
+          x: Math.round(proj.x),
+          y: Math.round(proj.y),
+        });
+        return;
+      }
+
+      // 2. Body Collision Check -> BODY HIT = MASS REDUCED FROM THERE!
+      for (let i = 0; i < targetPlayer.body.length; i++) {
+        const seg = targetPlayer.body[i];
+        const segDist = Math.hypot(proj.x - seg.x, proj.y - seg.y);
+        const segRadius = 10;
+
+        if (segDist < segRadius + proj.radius + 2) {
+          hit = true;
+          bulletProjectiles.delete(projId);
+
+          // Sever body at index i! Mass reduced from there onwards
+          const severedSegments = targetPlayer.body.slice(i);
+          targetPlayer.body = targetPlayer.body.slice(0, i);
+          targetPlayer.score = targetPlayer.body.length;
+
+          // Convert severed body segments into food pellets on the map
+          severedSegments.forEach((s) => {
+            const fId = `f_cut_${foodIdCounter++}`;
+            const pellet = {
+              id: fId,
+              x: s.x + (Math.random() - 0.5) * 10,
+              y: s.y + (Math.random() - 0.5) * 10,
+              color: targetPlayer.color,
+              value: 1,
+            };
+            food.set(fId, pellet);
+            broadcast({ type: 'spawn_food', food: pellet });
+          });
+
+          broadcast({
+            type: 'bullet_bodyhit',
+            shooterId: proj.shooterId,
+            shooterName: proj.shooterName,
+            victimId: targetPlayer.id,
+            victimName: targetPlayer.name,
+            x: Math.round(proj.x),
+            y: Math.round(proj.y),
+            cutCount: severedSegments.length,
+          });
+          break;
+        }
+      }
+    });
+
+    if (!hit) {
+      projectilesList.push({
+        id: proj.id,
+        x: Math.round(proj.x),
+        y: Math.round(proj.y),
+        vx: proj.vx,
+        vy: proj.vy,
+      });
+    }
   });
 
   // Collision Detection: Worm-to-Worm and Wall Crash
@@ -518,6 +751,8 @@ setInterval(() => {
   broadcast({
     type: 'state',
     players: playerUpdates,
+    bulletPickups: Array.from(bulletPickups.values()),
+    projectiles: projectilesList,
     tick: tickCount++,
     mapWidth: currentMapWidth,
     mapHeight: currentMapHeight,
